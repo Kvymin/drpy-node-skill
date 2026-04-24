@@ -214,9 +214,15 @@ house_file(action='upload', auto_replace=true)
 - `drpy_check_syntax`
 - `validate_spider`
 
-如用户要求“修好后再传”，建议补：
+如用户要求”修好后再传”，建议补：
 - `evaluate_spider_source`
 - 或关键接口单测
+
+### 🛑 检查点：确认检查结果再继续
+在进入 Step 3 前，先向用户呈现：
+- 语法/结构校验结果
+- 初步 A/B/C 档判断
+- 用户确认后再继续执行或终止
 
 ### 强制工具检查点（新增）
 在给出“A / B / C 档判断”前，至少应明确自己已经做了哪类工具验证：
@@ -249,6 +255,13 @@ house_file(action='upload', auto_replace=true)
 ```text
 house_file(action='update_tags')
 ```
+
+### 🛑 检查点：确认上传结果
+上传完成后向用户呈现：
+- 文件名、file_id、CID、tags
+- 是否公开
+- 新上传还是替换上传
+- 用户确认后可继续修标签或结束
 
 ---
 
