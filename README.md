@@ -173,9 +173,9 @@ AI 判断任务类型
 [MCP 层：执行工具]
    ├─ evaluate_spider_source
    ├─ test_spider_interface
-   ├─ read_file / edit_file / write_file
+   ├─ drpy_read_file / drpy_edit_file / drpy_write_file
    ├─ fetch_spider_url
-   ├─ validate_spider / check_syntax
+   ├─ validate_spider / drpy_check_syntax
    └─ house_file / house_verify
    ↓
 结果返回给用户

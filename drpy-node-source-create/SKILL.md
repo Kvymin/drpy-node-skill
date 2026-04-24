@@ -38,8 +38,8 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 **工具调用顺序：**
 ```
 1. get_spider_template()       → 获取标准模板
-2. write_file()                → 保存到 spider/js/[源名].js
-3. check_syntax(path)          → 语法检查
+2. drpy_write_file()                → 保存到 spider/js/[源名].js
+3. drpy_check_syntax(path)          → 语法检查
 4. validate_spider(path)       → 结构检查
 5. test_spider_interface(home) → 测试首页
 6. test_spider_interface(category, class_id) → 测试一级
@@ -70,6 +70,27 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 ### 核心原则：模板内置优先，最小覆盖
 能走模板内置就不要急着手写覆盖。很多问题是继承残留导致的，不是模板本身失效。
 
+### 12 个内置模板选择指南
+
+`guess_spider_template` 返回模板名后，理解其对应关系：
+
+| 模板名 | CMS 类型 | URL 模式 | double | 二级 lazy |
+|--------|---------|----------|--------|-----------|
+| mx | 苹果CMS旧版 | `/vodshow/fyclass--------fypage---/` | true | common_lazy(提取player_* JSON) |
+| mxpro | 苹果CMS Pro | `/vodshow/fyclass--------fypage---.html` | true | common_lazy |
+| mxone5 | One5主题 | `/show/fyclass--------fypage---.html` | true | common_lazy |
+| 首图 | 首图CMS | `/vodshow/fyclass--------fypage---/` | true | common_lazy |
+| 首图2 | 首图CMS v2 | `/list/fyclass-fypage.html` | true | common_lazy |
+| 海螺3 | 海螺CMS v3 | `/vod_____show/fyclass--------fypage---.html` | true | common_lazy |
+| 海螺2 | 海螺CMS v2 | `/index.php/vod/show/id/fyclass/page/fypage/` | true | common_lazy |
+| 短视 | 短视频 | `/channel/fyclass-fypage.html` | true | common_lazy |
+| 短视2 | 短视频v2 | API驱动(`#type=fyclass&page=fypage`) | true | common_lazy |
+| 采集1 | 采集站 | API: `?ac=detail&pg=fypage&t=fyclass` | false | cj_lazy(依赖parse_url) |
+
+**double: true** 意味着推荐需要两层解析（先取外层容器，再从内层提取数据）。如果首页推荐空，优先检查是否误用了 `double: true`。
+
+详细模板字段见 `references/references-template-system.md`。
+
 ### 模板继承核查清单（必须完成后再写规则）
 1. `class_parse` 是否残留并覆盖 `class_name/class_url`？→ 显式补 `class_parse: ''`
 2. `double` 是否导致首页推荐为空？→ 单层推荐优先 `double: false`
@@ -87,7 +108,7 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 | 首页推荐空 | `double` 是否为 true，推荐节点是否真实存在 |
 | detail 不通 | `detailUrl` 是否缺失（纯数字 vod_id 必须设 detailUrl） |
 | 搜索空 | 搜索页 DOM 是否独立于一级（不要默认 `搜索: '*'`） |
-| `*` 含义不清 | 先读 `references/references-template-summary.md`，`*` 继承一级 |
+| `*` 含义不清 | 先读 `references/references-template-system.md`，`*` 继承一级 |
 
 ### 参考资料
 - `references/references-inherited-template-minimal-override-site.md`
@@ -205,3 +226,59 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 
 ### 强制停手检查点
 出现以上任一情况时，必须停止在 create skill 内扩写，明确切换。
+
+---
+
+## 五种编写模式速览
+
+根据站型和复杂度，从以下五种模式中选一种。优先上层模式（代码量少、更稳定）。
+
+| 模式 | 代码量 | 适用场景 | 关键字段 |
+|------|--------|---------|---------|
+| **模板继承** | 7-15行 | `guess_spider_template` 命中内置模板 | `模板: 'mxpro'`, `class_parse`, `url` |
+| **字符串规则** | 15-30行 | DOM 结构稳定的标准站 | `一级: 'ul li;a&&title;...'` |
+| **js: 内联** | 1-2行表达式 | 字符串规则中嵌入少量计算 | `一级: 'js:let x=input...'` |
+| **async 函数** | 50-200行 | 签名 API、反爬、非标站 | `一级: async function() { ... }` |
+| **网盘型** | 100-300行 | 多网盘资源聚合 | `hostJs`, `line_order`, `lazy` 按 flag 分派 |
+
+**核心原则**: 能用模板继承就不用字符串规则，能用字符串就不用 async 函数，逐步增加复杂度。
+
+---
+
+## 特殊内容类型
+
+当源类型非影视时，需要在 lazy 中返回特殊协议：
+
+### 漫画类型
+```js
+lazy: async function () {
+    let html = await request(input);
+    let arr = pdfa(html, '.comic-pages&&img');
+    let urls = arr.map(it => pdfh(it, 'img&&data-src'));
+    return { parse: 0, url: 'pics://' + urls.join('&&'), js: '' };
+}
+```
+
+### 小说类型
+```js
+lazy: async function () {
+    let html = await request(content_url);
+    let json = JSON.parse(html);
+    let ret = JSON.stringify({ title, content: json.data.content });
+    return { parse: 0, url: 'novel://' + ret, js: '' };
+}
+```
+
+### 音频/音乐类型
+```js
+lazy: async function () {
+    let html = await request(input);
+    // 提取直链 m4a/mp3
+    let music = html.match(/var\s+music\s*=\s*(\{[\s\S]*?\})/)[1];
+    music = JSON5.parse(music);
+    input = urljoin(input, music.file + ".m4a");
+    return input; // 返回字符串，框架自动判断为 parse:0
+}
+```
+
+详情见 `references/references-special-content.md`。

@@ -4,11 +4,9 @@
 > 典型特征：页面源码几乎为空，所有内容由前端 JS 异步渲染。
 > 已验证案例：247看（2026-04-21）
 
-### ⚠️ 通用经验已提炼
-本文档中的第 3~7 节经验已提炼为跨站型通用知识，完整参考：
+### ⚠️ 通用经验已提炼至独立参考
+与 async 函数相关的通用模式（this.input、detailUrl、POST body、searchUrl、推荐聚合等）均在：
 - **`references/references-async-function-patterns.md`**（async 函数通用模式与陷阱）
-
-本文档仍保留纯 API 站的专属内容（站型识别、URL 模板定义、完整源模板），但通用部分建议直接查阅上述 reference。
 
 ---
 
@@ -49,152 +47,7 @@ var rule = {
 
 ---
 
-## 3. this.input 的正确理解（最易踩坑）
-
-### ❌ 错误理解
-`this.input` 是引擎自动请求后的响应内容，可以直接 `JSON.parse(this.input)`
-
-### ✅ 正确理解
-`this.input` 是 URL/homeUrl/detailUrl/searchUrl 模板渲染后的 **完整 URL 字符串**。
-
-### 验证方法
-如果 `JSON.parse(this.input)` 报错 `"https://xx is not valid JSON"`，说明 this.input 是 URL 而非响应。
-
-### 正确用法
-```js
-// 所有 async 函数内的标准模式
-let data = JSON.parse(await request(this.input));
-```
-
----
-
-## 4. detailUrl 的关键作用
-
-### 问题描述
-一级返回的 `vod_id` 是纯数字（如 `534735`），引擎需要把它映射成完整详情 URL。
-
-### 解决方案
-```js
-detailUrl: '/api/videos/fyid'
-```
-引擎会自动把 `fyid` 替换为 `534735`，生成 `https://example.com/api/videos/534735`。
-
-### 二级函数中
-- `this.input` = 渲染后的完整 URL（如 `https://example.com/api/videos/534735`）
-- `this.orId` = 原始 vod_id（纯数字 `534735`）
-
-**如果不设 detailUrl，二级函数的 this.input 可能为空或无效，导致详情全部失败。**
-
----
-
-## 5. 搜索 async 函数的特殊处理
-
-### searchUrl 必须带 `**`
-```js
-searchUrl: '/api/search?q=**&page=fypage'
-```
-不带 `**`，引擎不会注入 `this.KEY`，搜索函数拿不到关键词。
-
-### 搜索函数内可用的变量
-```js
-搜索: async function () {
-    let KEY = this.KEY;        // 搜索关键词
-    let MY_PAGE = this.MY_PAGE; // 页码
-    let input = this.input;     // searchUrl渲染后的URL
-}
-```
-
-### request POST 的正确写法
-```js
-// ✅ 正确：body 参数 + JSON.stringify
-let html = await request(url, {
-    method: 'POST',
-    body: JSON.stringify({ q: KEY, limit: 20 }),
-    headers: { 'Content-Type': 'application/json' }
-});
-
-// ❌ 错误：data 参数传对象（会被当成 form-data）
-let html = await request(url, {
-    method: 'POST',
-    data: { q: KEY, limit: 20 },
-    headers: { 'Content-Type': 'application/json' }
-});
-```
-
-### 外部 API 可能需要额外 Header
-- MeiliSearch 等搜索服务需要 `Authorization: Bearer xxx`
-- 必须从浏览器 Network 面板抓取
-- `fetch_spider_url` 直接请求可能返回 401
-
----
-
-## 6. 推荐（首页）函数要完整聚合
-
-### 常见错误
-只取 API 返回的 `data.featured`（5条），忽略其他推荐数据源。
-
-### 正确做法
-完整分析 `/api/home` 的响应结构，聚合所有推荐维度：
-
-```js
-推荐: async function () {
-    let data = JSON.parse(await request(this.input));
-    let d = data.data;
-    let items = [];
-    let added = {};  // 按 vod_id 去重
-
-    function addVod(v) {
-        let id = String(v.vod_id);
-        if (!added[id]) {
-            added[id] = true;
-            items.push({
-                vod_name: v.vod_name,
-                vod_pic: v.vod_pic || v.vod_tmdb_poster || '',
-                vod_remarks: v.vod_remarks || '',
-                vod_id: id
-            });
-        }
-    }
-
-    // 聚合所有推荐源
-    if (d.featured) d.featured.forEach(addVod);
-    if (d.latest) d.latest.forEach(addVod);
-    if (d.trending) d.trending.forEach(addVod);
-    if (d.categories) d.categories.forEach(function (cat) {
-        if (cat.videos) cat.videos.forEach(addVod);
-    });
-
-    return items;
-},
-```
-
----
-
-## 7. 代码整洁规范
-
-### 不要写重复属性
-```js
-// ❌ 错误：两个 lazy
-lazy: '',
-// ... 中间很多代码 ...
-lazy: async function () { ... }
-
-// ✅ 正确：只写一个
-lazy: async function () { ... }
-```
-
-### 不要手动拼 URL
-```js
-// ❌ 啰嗦：手动拼接
-let url = HOST + '/api/categories/' + MY_CATE + '/videos?page=' + MY_PAGE;
-
-// ✅ 简洁：用 this.input
-let data = JSON.parse(await request(this.input));
-```
-
----
-
-## 8. 完整源模板
+## 3. 完整源模板
 
 ```js
 var rule = {
@@ -275,7 +128,7 @@ var rule = {
 
 ---
 
-## 9. 排障 Checklist
+## 4. 排障 Checklist
 
 | 症状 | 优先检查 |
 |---|---|
