@@ -67,6 +67,19 @@ jx = tellIsJx(playUrl);  // 判断是否站外解析
 
 所以在 lazy 中返回字符串 `"https://example.com/movie.m3u8"` 也是安全的——框架会自动处理。
 
+## tellIsJx 判断规则（站外解析识别）
+
+框架的 `tellIsJx(url)` 通过 URL 特征判断是否为站外解析链接：
+
+```
+匹配站外解析的典型特征：
+- 域名与当前站点 host 不同（跨域）
+- URL 含常见解析关键字: jx, 解析, api, player, parse, open, url
+- URL 指向已知解析服务商域名模式
+```
+
+手动判断时可参考此规则，但最终以框架 `tellIsJx` 正式行为为准。
+
 ## 特殊情况：webplay 线路
 
 部分站点同时提供多条播放线路，其中某些线路是「webplay」需要特殊处理：
@@ -234,6 +247,32 @@ return { parse: 0, url: 'push://' + playUrl, js: '' };
 这些属于源整体完善项，应交回 create/workflow。
 
 ---
+
+## 实战排查案例：从 play.html 到正确 lazy
+
+### 场景
+某源 play 测试返回 `{"url": "/play/1-1.html", "parse": 0}`，播放器不工作。
+
+### 排查步骤
+
+```
+1. 前提检查：test_spider_interface(detail) → detail 通，vod_play_url 有值 ✓
+2. lazy 类型：源未写自定义 lazy → 走模板默认（mxpro → common_lazy）
+3. 返回类型：url 是 /play/1-1.html → 网站播放页，不是直链
+4. 根因诊断：common_lazy 预期提取 player_* JSON 输出直链，
+   但实际返回了 /play/1-1.html → 说明播放页可能没有 player_* 配置，
+   或 common_lazy 解析失败
+5. 修复方案 A（简单）：去掉自定义 lazy，让框架用 def_lazy 兜底
+   → 返回 {parse:1, url:input}，交由嗅探系统
+6. 修复方案 B（直链）：用 extract_iframe_src 提取 iframe → m3u8
+   → 返回 {parse:0, url: 'https://...m3u8'}
+7. 验证：test_spider_interface(play) 确认修复后返回值
+```
+
+### 关键教训
+- **不要见 play.html 就判 lazy 写错** — 先区分是预期行为还是解析失败
+- **修复应优先选简单方案** — 嗅探可用就不必强行提取直链
+- **始终从 detail 状态开始排查** — detail 不通时排查 lazy 毫无意义
 
 ## 排查顺序总结
 
