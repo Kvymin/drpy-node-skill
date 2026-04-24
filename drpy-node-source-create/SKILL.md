@@ -27,10 +27,13 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 **工具调用：`guess_spider_template(url)`**
 
 - 命中模板（返回 mx/mxpro/首图 等） → 走路线 A
-- 不命中 + 页面源码为空（SPA 容器） → 走路线 C
-- 不命中 + 有 HTML 但数据由接口驱动 → 走路线 B
+- 不命中 + 页面源码几乎为空（body 只有 SPA 容器） → 走路线 C
+- 不命中 + 页面有筛选控件/header/footer 但列表区域无直出内容 → 先用 `fetch_spider_url` 检查是否存在 `/api/` 接口：
+  - 找到 JSON API → 走路线 C（纯 API 站）
+  - 无 JSON API + 数据由带签名接口驱动 → 走路线 B
+- 不命中 + 有完整 HTML 列表 DOM → 走路线 B（手动分析接口）
 
-**辅助判断：`analyze_website_structure(url)` 抓取精简 DOM 结构**
+**辅助判断：`analyze_website_structure(url)` 抓取精简 DOM 结构（注意看列表区域是空容器还是直出 HTML）**
 **辅助判断：`fetch_spider_url(url)` 查看原始响应和 headers**
 
 ### Step 3：保住最小可用链路
@@ -117,7 +120,7 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 
 ## 路线 B：非模板签名接口站
 
-当站点不是内置模板，且分类页由前端带签名的接口驱动时走此路线。
+当站点不是内置模板，有完整 HTML DOM 结构，但分类/搜索等数据由前端带签名的接口驱动时走此路线。此路线介于路线 A（纯模板继承）和路线 C（全 async API）之间——页面结构可通过 HTML 解析，但数据加载依赖接口调用。
 
 ### 先判断一级是否由签名接口驱动
 不要看到 `data-api` 就直接假设这是可裸 GET 的 JSON 接口。必须确认：
@@ -127,6 +130,14 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 
 ### 已验证经验
 裸 GET 可能只返回无效文本，浏览器真实请求却是带签名的 POST。
+
+### 分级编写策略
+按复杂度从低到高逐步尝试，不要一上来就写全 async：
+
+1. **先试二级字典**：如果详情页是 HTML 而非 JSON，优先用二级字典映射（`{title, img, desc, content, tabs, lists}`）。`lists` 容器层级从 ul 下沉到 li 即可解决多集问题，无需切 async。
+2. **一级优先 async**：签名接口必须用 async 函数处理，无法用字符串规则。用 `this.MY_CATE` / `this.MY_PAGE` 代替手动拼 URL。
+3. **搜索独立验证**：签名站的搜索接口通常独立于一级，不要假设 `搜索: '*'` 继承生效。先用 `fetch_spider_url` 测试搜索 API 连通性。
+4. **模板可混合**：签名接口站的首页推荐和播放页 lazy 可能仍可使用模板默认逻辑。优先保留模板的推荐/lazy，只覆盖一级/搜索。
 
 ### 参考资料
 - `references/references-non-template-signed-api-site.md`
