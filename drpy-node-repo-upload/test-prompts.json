@@ -23,5 +23,20 @@
     "id": "fake-play-final-upload",
     "prompt": "这个源语法通过，但 play 返回 parse:0 的 play.html；我是要最终版修好后再传。",
     "expected": "判定播放假通过触发 C 档；最终版要求 L3，不上传，回传文件路径、红线、验证等级并建议转 play-debug/workflow。"
+  },
+  {
+    "id": "autonomous-upload-after-100",
+    "prompt": "workflow 已把 spider/js/某源.js 修到 evaluate 100，用户最初要求做好后自动上传，标签 ds，公开。请上传并核验。",
+    "expected": "识别自主全流程上传模式；house_verify；确认 L3=100、A档、path/tags/is_public 明确后直接 upload auto_replace=true；随后 info 核验并返回 file_id/cid/tags/is_public。"
+  },
+  {
+    "id": "autonomous-upload-score-not-100",
+    "prompt": "source-create 交给你上传，但 evaluate 只有 90；用户要求最终版修到 100 后上传。",
+    "expected": "拒绝上传；判定未满足 L3=100 的最终版要求，返回 score_below_target，回传 workflow/source-create 继续修复或报告 blocker。"
+  },
+  {
+    "id": "autonomous-upload-ambiguous-tags-stop",
+    "prompt": "源已经 100 分，用户说上传仓库，但没有说标签；仓库里已有多个同名文件。",
+    "expected": "因 tags/目标对象不明确或多候选，返回 ambiguous_upload 并暂停确认；不自行选择仓库对象，不静默替换。"
   }
 ]

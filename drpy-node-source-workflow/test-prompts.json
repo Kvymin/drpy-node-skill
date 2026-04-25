@@ -23,5 +23,20 @@
     "id": "play-broken-missing-context",
     "prompt": "某源播放不通，detail 还没测，你直接转 lazy 专项看看。",
     "expected": "拒绝空转 play-debug；先测 category/detail 补真实 ids、vod_play_from、vod_play_url、flag 和 play_url，detail 稳定后才分流。"
+  },
+  {
+    "id": "end-to-end-url-alive-build-iterate-upload",
+    "prompt": "给你这个影视站 URL。先检查站点是否活着；如果活着就自动做 drpy 源，测试并迭代到 evaluate 100 分，然后上传仓库，标签 ds，公开。除非站点坏了、强反爬、缺登录凭据或高风险操作，不要中途停下来问我。",
+    "expected": "workflow 进入自主全流程；先 alive check；可访问后 source-create 建源；evaluate 未满 100 时按丢分接口循环修复，play 问题转 play-debug 并回收 autonomous_next；遇到 broken_site/hard_anti_bot/missing_credentials/high_risk_change 停止；达到 L3=100 后转 repo-upload 自动上传 tags=ds/is_public=true 并 info 核验。"
+  },
+  {
+    "id": "url-broken-site-stop",
+    "prompt": "这个 URL 帮我自动做源并上传，但如果站点不通就停止。",
+    "expected": "先执行 alive check；若连接失败、DNS/超时/长期 5xx/错误页，则不建源、不上传，报告 broken_site 和已验证证据。"
+  },
+  {
+    "id": "url-hard-antibot-stop",
+    "prompt": "这个 URL 自动做源修到 100 上传；如果有验证码或必须登录就别硬绕。",
+    "expected": "alive check 发现验证码、登录墙、Cookie/Authorization 缺失或强 headless 检测时停止，报告 hard_anti_bot 或 missing_credentials，不尝试绕过或写死凭据。"
   }
 ]

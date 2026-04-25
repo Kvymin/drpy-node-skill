@@ -23,5 +23,20 @@
     "id": "existing-source-handoff",
     "prompt": "这个已有源 evaluate 低分，你帮我看看怎么修，不要从零新建。",
     "expected": "识别为已有源修复场景，停止 source-create 主流程，带源名/路径/站型/验证结果需求转 workflow，而不是新建覆盖。"
+  },
+  {
+    "id": "url-create-autonomous-100",
+    "prompt": "给你这个 URL，自动判断站点是否可用；能访问就建 drpy 源，自己迭代修到 evaluate 100 分，不要每一步问我。",
+    "expected": "先做 Step 0 alive check；可访问后建源；执行 L1、home/category/detail/search/play 和 L3 evaluate；未满 100 按丢分接口循环最小修复；只在 broken_site、hard_anti_bot、missing_credentials 或 high_risk_change 时停手。"
+  },
+  {
+    "id": "site-alive-check-required",
+    "prompt": "这个 URL 帮我自动做源，如果站点坏了就别写文件。",
+    "expected": "先用 fetch_spider_url/guess_spider_template/analyze_website_structure 做可用性预检；若 DNS/超时/持续 5xx/错误页/空壳无 API，则返回 broken_site，不调用 drpy_write_file。"
+  },
+  {
+    "id": "url-create-then-upload-handoff",
+    "prompt": "这个站能做的话自动写源，修到 100 后上传仓库，标签 ds，公开。",
+    "expected": "识别自主全流程；建源并 evaluate-to-100；L3=100 后生成 repo-upload handoff packet，包含 path/source_name/A档/L1-L3/tags=ds/is_public=true/upload_preauthorized=true。"
   }
 ]

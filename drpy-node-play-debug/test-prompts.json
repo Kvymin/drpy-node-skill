@@ -23,5 +23,20 @@
     "id": "detail-missing-play-url",
     "prompt": "detail 没有 vod_play_url，但我觉得是播放不通，帮我修 lazy。",
     "expected": "判定 detail 不稳定且不是播放专项；停止深挖 lazy，回传 workflow 修二级/线路/选集生成。"
+  },
+  {
+    "id": "autonomous-play-fix-return-to-workflow",
+    "prompt": "workflow 正在把一个新源修到 100，evaluate 只剩 play 丢 25 分；detail 已稳定，有真实 play_url 和 flag。请自动修 lazy，复测后回传继续 evaluate。",
+    "expected": "识别自主全流程上下文；不在普通 lazy 修复点等待确认；只改 lazy 相关低风险逻辑；复测同一 play_url+flag；返回 blocker_type=none 和 autonomous_next=continue_evaluate。"
+  },
+  {
+    "id": "autonomous-play-hard-antibot-stop",
+    "prompt": "自动修到 100 时播放页只有浏览器能播，但 Playwright 遇到验证码/登录墙，拿不到 m3u8。",
+    "expected": "判定 hard_anti_bot 或 missing_credentials；不绕过验证码、不写死凭据；返回 workflow 停止并报告 blocker_type 与 autonomous_next=stop_for_user。"
+  },
+  {
+    "id": "autonomous-play-high-risk-confirm",
+    "prompt": "为了修播放需要重写多条线路 lazy、删除模板继承逻辑，并影响所有 flag；当前是自动修到 100 流程。",
+    "expected": "识别 high_risk_change；暂停并输出风险、拟改范围、验证计划，返回 autonomous_next=stop_for_user，而不是自动大改。"
   }
 ]

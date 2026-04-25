@@ -26,7 +26,8 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 |---|---|---|
 | 只读 / 规划 / dry-run / 不要改文件 | 读取、诊断、给建源方案、列验证计划 | `drpy_write_file`、`drpy_edit_file`、仓库上传/改标签 |
 | 需要确认后再改 | 读取、诊断、输出方案 | 未确认前禁止写入源文件 |
-| 明确要求执行 | 按本 skill 流程建源与验证 | 不跳过建源方案确认和最小验证链 |
+| 明确要求执行 | 按本 skill 流程建源与验证 | 不跳过高风险确认点和最小验证链 |
+| 自主全流程 | alive check、建源、L1/L2/L3、低风险最小修复、L3=100 后 handoff | 坏站硬写、未达 100 冒充最终版、仓库动作越界 |
 
 如果用户说“只给方案 / 不要写文件 / dry-run”，本 skill 只能输出站型判断、源名候选、拟写字段和验证计划。
 
@@ -56,6 +57,46 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 ---
 
 ## 30 秒最短建源路线（执行入口）
+
+### Step 0：URL 可用性预检
+
+只要用户给 URL，就先判断站点是否活着，再决定是否写源。自主全流程模式下尤其不能跳过此步。
+
+优先工具：
+
+1. `fetch_spider_url(url)`：确认连接、状态码、响应体、headers，识别 403/5xx/空响应。
+2. `guess_spider_template(url)`：判断是否命中模板，辅助识别 CMS 站。
+3. `analyze_website_structure(url)`：看页面是 HTML 直出、SPA 空壳还是错误页。
+4. 必要时用浏览器网络证据确认 SPA/API 请求；若仍需登录、验证码或动态凭据，停止。
+
+停手条件：
+
+| blocker_type | 表现 | 动作 |
+|---|---|---|
+| `broken_site` | DNS/连接失败、超时、持续 5xx、错误页、空壳且无可复现 API | 不写源，回报证据 |
+| `hard_anti_bot` | 验证码、强 headless 检测、DRM/WASM 等 | 不绕过，回报需授权/人工处理 |
+| `missing_credentials` | 登录、Cookie、Authorization、Token 缺失 | 等用户提供凭据 |
+
+可用站点才进入 Step 1。自主模式下，Step 0 通过后可连续建源、验证和低风险修复；普通模式仍按后续检查点确认。
+
+### evaluate-to-100 循环
+
+当用户要求“修到100 / 满分后上传 / 自动完成”时，`evaluate_spider_source` 是必跑项，不是可选项。
+
+循环规则：
+
+```text
+L3 evaluate → 按丢分接口拆 L2 → 最小修复 → 复测该接口 → 重新 evaluate
+```
+
+- home/category 丢分：优先查 `class_parse`、`url`、`double`、一级 selector/API。
+- detail 丢分：必须使用一级真实 `vod_id`，先修 `detailUrl/二级字典/lists`。
+- search 丢分：先换高频宽匹配词，再判断 `searchUrl`、搜索 DOM/API。
+- play 丢分：detail 稳定后带真实 `ids/play_url/flag` 转 `drpy-node-play-debug`。
+- 达到 L3=100、A 档、`upload_preauthorized=true`，且 tags、is_public、auto_replace 策略和目标对象明确时，返回 repo-upload handoff packet；缺任一项则返回 `ambiguous_upload` 或交回 workflow 确认。
+- 遇到 `broken_site/hard_anti_bot/missing_credentials/high_risk_change/score_below_target` 时停止并回报。
+
+---
 
 ### Step 1：定源名
 用户没给源名 → 从站名/标题/域名推导稳定候选。
@@ -94,7 +135,7 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 - 最小验证链：home → category → detail → search → play
 ```
 
-必须得到用户确认后再写入；如果涉及登录态、复杂反爬、批量抓取或上传，也必须先确认。源内 metadata 只描述运行时源身份，不等同于仓库 tags；上传标签交给 repo-upload 处理。
+自主全流程模式下，Step 0 已通过且用户明确授权自动完成时，可直接写入最小源并继续 L1/L2/L3；普通模式必须得到用户确认后再写入。如果涉及登录态、复杂反爬、批量抓取或高风险重写，任何模式都必须先确认。源内 metadata 只描述运行时源身份，不等同于仓库 tags；上传标签交给 repo-upload 处理。
 
 ### Step 4：保住最小可用链路
 
@@ -106,7 +147,7 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 4. validate_spider(path)       → 结构检查
 
 ### 🛑 检查点：确认写入结果再继续验证
-源文件已写入并通过语法/结构检查，向用户确认后再跑接口验证链：
+普通模式下，源文件已写入并通过语法/结构检查，向用户确认后再跑接口验证链；自主全流程模式下，此处只记录 L1 证据并继续跑 L2/L3：
 
 ```markdown
 ## 写入确认
@@ -117,14 +158,14 @@ description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 
 - 拟验证链：home → category → detail → search → play
 ```
 
-确认后继续 Step 5-10 验证链；若语法或结构未通过，修好后再继续。
+确认后继续 Step 5-10 验证链；自主全流程模式下自动继续。若语法或结构未通过，先做最小修复再继续。
 
 5. test_spider_interface(home) → 测试首页
 6. test_spider_interface(category, class_id) → 测试一级
 7. test_spider_interface(detail, ids)        → 测试二级
 8. test_spider_interface(search, keyword)    → 测试搜索
 9. test_spider_interface(play, play_url)     → 测试播放
-10. evaluate_spider_source()   → 全流程评估（可选）
+10. evaluate_spider_source()   → 全流程评估（自主/最终版/上传前必跑，普通初步验证可选）
 ```
 
 **单接口调试工具：**
@@ -500,7 +541,7 @@ DS 源运行在 drpy 沙箱中，不是普通 Node.js 模块；源内可用 `req
 |---|---|
 | workflow | 源名、文件路径、站型、home/category/detail/search/play 验证结果、失败接口、证据工具 |
 | play-debug | source_name、真实 detail ids、`vod_play_from`、`vod_play_url`、flag、当前 play 返回 |
-| repo-upload | 文件路径、L1/L2/L3 验证等级、A/B/C 建议、用户标签要求 |
+| repo-upload | 文件路径、源名、内容类型、L1/L2/L3 验证等级、A/B/C 建议、`upload_preauthorized`、用户标签要求、is_public、auto_replace 策略、目标对象是否明确 |
 
 ### 强制停手检查点
 出现以上任一情况时，必须停止在 create skill 内扩写，明确切换。
