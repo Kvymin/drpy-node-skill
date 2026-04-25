@@ -250,6 +250,44 @@ jx = tellIsJx(playUrl);  // 判断是否站外解析
 3. 找到后用 `JSON.parse` 或正则提取 url 字段
 （若 player_* 配置在 HTML 属性中，仍优先用模板默认 common_lazy 处理）
 
+### 多线路排障诊断流程
+
+当用户报告"多线路部分能播部分不能"时，不要直接改 lazy。先做对比诊断：
+
+```
+Step 1: 分别测试每条线路
+  test_spider_interface(play, play_url='线路A真实URL', flag='线路A')
+  test_spider_interface(play, play_url='线路B真实URL', flag='线路B')
+  记录每条线路的返回 {parse, jx, url}。
+
+Step 2: 对比能播与不能播线路的差异
+  - flag 名称是否暗示不同处理（如 "直链" vs "解析" / "线路1" vs "webplay"）？
+  - input URL 路径/域名模式有何不同？
+  - 返回的 url 是什么类型（m3u8/mp4/play.html/跨域解析）？
+
+Step 3: 检查 lazy 来源
+  get_resolved_rule(path) 确认当前 lazy 是模板继承还是自定义。
+  如果是模板继承（common_lazy/def_lazy/cj_lazy），先读 references/references-play-lazy-summary.md
+  确认该模板默认行为是否已覆盖其中一条线路。
+
+Step 4: 判断停手条件
+  - 能播/不能播的差异在 input URL 模式上 → 本 skill 可修复（见下方"多线路混合处理"）
+  - 不能播是因为 detail 未产出对应线路的 vod_play_url → 交回 workflow 修 detail
+  - 涉及修改 detail 的线路名/分组/选集生成逻辑 → 立即停手，交回 workflow
+```
+
+**工具调用示例**（分别测试两条线路）：
+```text
+# 先确认 detail 稳定产出所有线路
+test_spider_interface(source_name='源名', interface='detail', ids='一级返回的真实 vod_id')
+
+# 分别测试各线路
+test_spider_interface(source_name='源名', interface='play', play_url='线路A的播放地址', flag='线路A')
+test_spider_interface(source_name='源名', interface='play', play_url='线路B的播放地址', flag='线路B')
+
+# 如果某线路返回假通过（parse:0 但 url 仍是 play.html），按"假通过识别"处理
+```
+
 ### 多线路混合处理
 当一个源有多条线路（如"线路A直链m3u8 + 线路B需要解析"），lazy 不应一刀切。
 应根据 input 的 URL 特征分别处理：
