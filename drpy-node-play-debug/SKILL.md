@@ -259,6 +259,13 @@ jx = tellIsJx(playUrl);  // 判断是否站外解析
 
 不要用静态 HTML 抓取失败直接判定站点无直链。
 
+**Playwright 失败降级：**
+如果 Playwright 也无法获取媒体请求（headless 检测/WASM 解密/DRM）：
+1. 检查是否需要登录或验证码 → 需要则停手说明，不绕过
+2. 检查页面是否检测 headless → 修改 `browser_navigate` 的 UA 或 viewport 重试
+3. 若最终仍拿不到直链 → 在修复结论中标注"需浏览器确认"，不要强行返回空直链
+4. 单条线路失败不判定整源播放不可用 → 标为"某线路需浏览器确认"
+
 ### player_* 配置提取
 部分站的播放器配置（含视频地址）不在 HTML 元素属性中，而是嵌入在 `<script>` 标签的 JSON 对象里：
 1. 用 `pdfa(html, 'script')` 列出所有 script 标签内容
