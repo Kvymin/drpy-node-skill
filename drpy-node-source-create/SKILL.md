@@ -473,6 +473,25 @@ DS 源运行在 drpy 沙箱中，不是普通 Node.js 模块；源内可用 `req
 ### 何时切换到 play-debug
 - 主要卡在 lazy/直链/iframe/m3u8/parse 判断
 
+### 转交前预诊断（Handoff 前必须做的）
+
+在转交 workflow 之前，先收集关键证据让下游不必重头摸索：
+
+```text
+1. drpy_read_file(path)          → 确认现有源内容
+2. drpy_check_syntax(path)       → 语法检查
+3. evaluate_spider_source(源名)   → 全流程评分（记录各接口分数）
+4. 若 evaluate 显示某接口丢分：
+   test_spider_interface(category, class_id='1')
+   test_spider_interface(detail, ids='从一级拿真实 vod_id')
+   test_spider_interface(play, play_url='从 detail 拿真实 url', flag='从 detail 拿')
+   test_spider_interface(search, keyword='高频宽匹配词')
+   → 确定断点在哪个接口
+5. 记录失败类型：A 规则不通 / B 评估串联 / C 播放链
+```
+
+转交时把预诊断结果写入 packet，不要只写"这个源有问题"。
+
 ### Handoff Packet
 
 转交时必须带最小上下文，避免下游重新摸索：
